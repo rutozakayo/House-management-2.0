@@ -1,0 +1,15 @@
+{
+  "name": "rental-house-manager",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Offline-first rent and water tracker for a small rental portfolio.",
+  "type": "module",
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "serve": "npx --yes serve . -l 8080",
+    "test": "node tests/app.test.mjs && node tests/legacy.test.mjs && node tests/bridge.test.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^30.1.3"
+  }
+}

@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rental House Manager</title>
+<meta name="description" content="Track rent and water bills for your rental houses. Works offline.">
+<meta name="theme-color" content="#f5f6f8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1219" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Rent Manager">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="sticky-top">
+<header class="topbar">
+  <div class="topbar-row">
+    <div class="brand">
+      <span class="brand-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.6V21h14V9.6"></path><path d="M9.5 21v-6h5v6"></path>
+        </svg>
+      </span>
+      <div class="brand-text">
+        <h1>Rental House Manager</h1>
+        <p class="brand-sub" id="brandSub">Rent &amp; water tracker</p>
+      </div>
+    </div>
+    <button class="icon-btn" id="themeBtn" type="button" title="Switch theme" aria-label="Switch theme">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <circle cx="12" cy="12" r="4.2"></circle>
+        <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"></path>
+      </svg>
+    </button>
+  </div>
+
+  <div class="month-row">
+    <label class="month-label" for="month">Working month</label>
+    <div class="month-controls">
+      <button class="icon-btn" type="button" data-month-step="-1" aria-label="Previous month">&#8249;</button>
+      <input type="month" id="month" aria-label="Working month">
+      <select id="monthFallback" aria-label="Working month" hidden></select>
+      <button class="icon-btn" type="button" data-month-step="1" aria-label="Next month">&#8250;</button>
+    </div>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist" aria-label="Sections">
+  <button class="tab" type="button" role="tab" id="houses-tab" data-tab="houses" aria-selected="true">Houses</button>
+  <button class="tab" type="button" role="tab" id="rent-tab" data-tab="rent" aria-selected="false">Rent</button>
+  <button class="tab" type="button" role="tab" id="water-tab" data-tab="water" aria-selected="false">Water</button>
+  <button class="tab" type="button" role="tab" id="history-tab" data-tab="history" aria-selected="false">History</button>
+  <button class="tab" type="button" role="tab" id="summary-tab" data-tab="summary" aria-selected="false">Summary</button>
+  <button class="tab" type="button" role="tab" id="settings-tab" data-tab="settings" aria-selected="false">Settings</button>
+</nav>
+</div>
+
+<main>
+
+  <!-- ================= HOUSES ================= -->
+  <section class="panel" id="tab-houses" role="tabpanel" aria-labelledby="houses-tab">
+    <form class="card" id="houseForm" autocomplete="off">
+      <div class="card-head">
+        <h2 id="houseFormTitle">Add a house</h2>
+        <span class="badge" id="houseFormBadge" hidden>Editing</span>
+      </div>
+      <div class="grid">
+        <label>House number
+          <input id="hNumber" required placeholder="e.g. 1" maxlength="20">
+        </label>
+        <label>Tenant name
+          <input id="hTenant" required placeholder="Full name" maxlength="60">
+        </label>
+        <label>Tenant phone
+          <input id="hPhone" type="tel" inputmode="tel" placeholder="e.g. 0771234567" maxlength="20">
+        </label>
+        <label>Monthly rent
+          <input id="hRent" type="number" inputmode="decimal" min="0" step="any" required placeholder="0">
+        </label>
+        <label>Water rate per unit
+          <input id="hRate" type="number" inputmode="decimal" min="0" step="any" required placeholder="0">
+        </label>
+      </div>
+      <p class="hint">Rent and water rate are per month and per water unit. You can change them any time.</p>
+      <div class="form-actions">
+        <button class="btn" type="submit" id="houseSubmit">Save house</button>
+        <button class="btn alt" type="button" id="hCancel" hidden>Cancel edit</button>
+      </div>
+    </form>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Houses &amp; tenants</h2>
+        <span class="muted" id="houseCount"></span>
+      </div>
+      <div class="table-wrap">
+        <table class="stack">
+          <thead>
+            <tr>
+              <th>House</th><th>Tenant</th><th>Phone</th>
+              <th class="num">Rent</th><th class="num">Water / unit</th><th>Status</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="housesBody"></tbody>
+        </table>
+      </div>
+      <div id="housesEmpty" class="empty" hidden>
+        <p>No houses yet.</p>
+        <p class="hint">Add your first house with the form above. Everything is saved on this device.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= RENT ================= -->
+  <section class="panel" id="tab-rent" role="tabpanel" aria-labelledby="rent-tab" hidden>
+    <div class="card">
+      <div class="card-head"><h2>Record a rent payment</h2></div>
+      <form id="rentForm" class="grid" autocomplete="off">
+        <label>House<select id="rHouse" required></select></label>
+        <label>Amount paid
+          <input id="rAmount" type="number" inputmode="decimal" min="0" step="any" required placeholder="0">
+        </label>
+        <label>Date<input id="rDate" type="date" required></label>
+        <label>Note <span class="opt">optional</span>
+          <input id="rNote" maxlength="60" placeholder="e.g. cash, MoMo ref">
+        </label>
+      </form>
+      <p class="hint" id="rentHint"></p>
+      <div class="form-actions">
+        <button class="btn" type="submit" form="rentForm">Record payment</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Rent status — <span class="monthLabel"></span></h2>
+        <button class="btn small alt" type="button" id="rentBulkBtn">Message all</button>
+      </div>
+      <div id="rentMessages"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Rent payments — <span class="monthLabel"></span></h2></div>
+      <div id="rentPayments"></div>
+    </div>
+  </section>
+
+  <!-- ================= WATER ================= -->
+  <section class="panel" id="tab-water" role="tabpanel" aria-labelledby="water-tab" hidden>
+    <div class="card">
+      <div class="card-head"><h2>Enter a water meter reading</h2></div>
+      <p class="hint" style="margin:-4px 0 12px">Read the meter, then enter both numbers. Units used × the house water rate = the bill. Saving again for the same month replaces that month's reading.</p>
+      <form id="waterForm" class="grid" autocomplete="off">
+        <label>House<select id="wHouse" required></select></label>
+        <label>Previous reading
+          <input id="wPrev" type="number" inputmode="decimal" min="0" step="any" required placeholder="0">
+        </label>
+        <label>Current reading
+          <input id="wCurr" type="number" inputmode="decimal" min="0" step="any" required placeholder="0">
+        </label>
+      </form>
+      <div class="preview" id="waterPreview" aria-live="polite">Units used — · Charge —</div>
+      <div class="form-actions">
+        <button class="btn" type="submit" form="waterForm">Save reading</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Water status — <span class="monthLabel"></span></h2></div>
+      <div id="waterMessages"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Record a water payment</h2></div>
+      <form id="waterPayForm" class="grid" autocomplete="off">
+        <label>House<select id="wpHouse" required></select></label>
+        <label>Amount paid
+          <input id="wpAmount" type="number" inputmode="decimal" min="0" step="any" required placeholder="0">
+        </label>
+        <label>Date<input id="wpDate" type="date" required></label>
+        <label>Note <span class="opt">optional</span>
+          <input id="wpNote" maxlength="60" placeholder="e.g. cash, MoMo ref">
+        </label>
+      </form>
+      <div class="form-actions">
+        <button class="btn" type="submit" form="waterPayForm">Record payment</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Water payments — <span class="monthLabel"></span></h2></div>
+      <div id="waterPayments"></div>
+    </div>
+  </section>
+
+  <!-- ================= HISTORY ================= -->
+  <section class="panel" id="tab-history" role="tabpanel" aria-labelledby="history-tab" hidden>
+    <div class="card">
+      <div class="card-head">
+        <h2>Month-by-month</h2>
+        <button class="btn small alt" type="button" id="historyCsvBtn">Export CSV</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th class="num">Rent due</th><th class="num">Rent paid</th><th class="num">Rent out</th>
+              <th class="num">Water billed</th><th class="num">Water paid</th><th class="num">Water out</th>
+              <th class="num">Total out</th>
+            </tr>
+          </thead>
+          <tbody id="historyBody"></tbody>
+          <tfoot id="historyFoot"></tfoot>
+        </table>
+      </div>
+      <div id="historyEmpty" class="empty" hidden>No months recorded yet.</div>
+      <p class="hint">Tap a row to open that month. "Out" means still unpaid.</p>
+    </div>
+  </section>
+
+  <!-- ================= SUMMARY ================= -->
+  <section class="panel" id="tab-summary" role="tabpanel" aria-labelledby="summary-tab" hidden>
+    <div class="kpis" id="summaryKpis"></div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>This month — <span class="monthLabel"></span></h2>
+        <div class="row-actions">
+          <button class="btn small" type="button" id="printBtn">Print</button>
+          <button class="btn small alt" type="button" id="monthCsvBtn">CSV</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>House</th><th>Tenant</th>
+              <th class="num">Rent due</th><th class="num">Rent paid</th><th class="num">Rent balance</th>
+              <th class="num">Water billed</th><th class="num">Water paid</th><th class="num">Water balance</th>
+            </tr>
+          </thead>
+          <tbody id="summaryBody"></tbody>
+          <tfoot id="summaryTotals"></tfoot>
+        </table>
+      </div>
+      <div id="summaryEmpty" class="empty" hidden>No houses registered yet.</div>
+    </div>
+
+    <div class="card" id="arrearsCard" hidden>
+      <div class="card-head"><h2>Unpaid from earlier months</h2></div>
+      <div id="arrearsBody"></div>
+      <p class="hint">Each tenant's rent is counted once per month from the month they were added.</p>
+    </div>
+  </section>
+
+  <!-- ================= SETTINGS ================= -->
+  <section class="panel" id="tab-settings" role="tabpanel" aria-labelledby="settings-tab" hidden>
+    <form class="card" id="settingsForm" autocomplete="off">
+      <div class="card-head"><h2>Reminders &amp; contact</h2></div>
+      <div class="grid">
+        <label>Your phone (landlord)
+          <input id="setLandlordPhone" type="tel" inputmode="tel" placeholder="e.g. 0771234567" maxlength="20">
+        </label>
+        <label>Country dialling code
+          <input id="setCountry" inputmode="numeric" placeholder="256" maxlength="4">
+        </label>
+        <label>Currency
+          <input id="setCurrency" placeholder="UGX" maxlength="6">
+        </label>
+        <label>Tenants must clear balance by
+          <input id="setDeadline" type="date">
+        </label>
+      </div>
+      <p class="hint">The dialling code turns local numbers (07…) into WhatsApp-ready numbers (2567…). Nothing leaves this device.</p>
+      <div class="form-actions"><button class="btn" type="submit">Save settings</button></div>
+    </form>
+
+    <div class="card">
+      <div class="card-head"><h2>Appearance</h2></div>
+      <label class="select-row">Theme
+        <select id="setTheme">
+          <option value="auto">Follow my phone</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Backup &amp; export</h2></div>
+      <div class="row-actions wrap">
+        <button class="btn small" type="button" id="backupBtn">Download backup</button>
+        <button class="btn small alt" type="button" id="restoreBtn">Restore backup</button>
+        <button class="btn small alt" type="button" id="settingsMonthCsvBtn">This month CSV</button>
+        <button class="btn small alt" type="button" id="settingsAllCsvBtn">All payments CSV</button>
+        <input type="file" id="restoreFile" accept="application/json,.json,text/plain" hidden>
+      </div>
+      <p class="hint">Records are stored inside this browser. Clearing browser data or changing phone wipes them — download a backup regularly and keep the file safe.</p>
+      <p class="hint">Coming from the old single-file version? <a href="legacy-export.html">Move your old records</a>.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Install &amp; offline</h2></div>
+      <div class="row-actions">
+        <button class="btn small" type="button" id="installBtn" hidden>Install app</button>
+        <span class="pill ok" id="offlinePill" hidden>Offline ready</span>
+      </div>
+      <p class="hint" id="installHint">On Android/Chrome: menu (⋮) → "Install app" / "Add to Home screen". On iPhone: open in Safari → Share → "Add to Home Screen". Once installed it opens without internet.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Erase data</h2></div>
+      <p class="hint">Deletes every house, payment and reading on this device. Download a backup first — this cannot be undone.</p>
+      <div class="row-actions">
+        <button class="btn small danger" type="button" id="clearAllBtn">Erase all data</button>
+      </div>
+    </div>
+
+    <p class="version" id="versionLine">Rental House Manager</p>
+  </section>
+
+</main>
+
+<div id="printArea" aria-hidden="true"></div>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<noscript><p class="noscript">This app needs JavaScript. Turn it on in your browser settings.</p></noscript>
+
+<script src="app.js"></script>
+</body>
+</html>
