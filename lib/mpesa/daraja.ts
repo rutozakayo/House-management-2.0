@@ -38,9 +38,10 @@ export function isDarajaConfigured(): boolean {
   );
 }
 
-export function getPublicAppOrigin(): string | null {
+export function getPublicAppOrigin(requestOrigin?: string | null): string | null {
   const candidates = process.env.NODE_ENV === "development"
     ? [
+        requestOrigin,
         process.env.V0_RUNTIME_URL,
         process.env.V0_DEV_APP_URL,
         process.env.V0_BUILD_URL,

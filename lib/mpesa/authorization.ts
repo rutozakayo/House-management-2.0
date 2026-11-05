@@ -2,7 +2,7 @@ import "server-only";
 import { auth } from "@/lib/auth";
 import { isAllowedRequestOrigin } from "@/lib/mpesa/validation.mjs";
 
-function allowedRequestOrigins(): string[] {
+function allowedRequestOrigins(request: Request): string[] {
   const origins = [process.env.BETTER_AUTH_URL];
   if (process.env.NODE_ENV === "development") {
     origins.push(
@@ -19,6 +19,24 @@ function allowedRequestOrigins(): string[] {
       process.env.VERCEL_URL,
     );
   }
+
+  const requestUrl = new URL(request.url);
+  origins.push(requestUrl.origin);
+  const forwardedProtocol = request.headers
+    .get("x-forwarded-proto")
+    ?.split(",")[0]
+    ?.trim();
+  const protocol = forwardedProtocol === "https" || forwardedProtocol === "http"
+    ? forwardedProtocol
+    : requestUrl.protocol.slice(0, -1);
+  for (const header of ["x-forwarded-host", "host"]) {
+    const hosts = request.headers.get(header)?.split(",") ?? [];
+    for (const host of hosts) {
+      const normalizedHost = host.trim();
+      if (normalizedHost) origins.push(`${protocol}://${normalizedHost}`);
+    }
+  }
+
   return origins.filter((origin): origin is string => Boolean(origin));
 }
 
@@ -28,7 +46,7 @@ export async function requireOwner(request: Request): Promise<
 > {
   if (request.method !== "GET" && request.method !== "HEAD") {
     const origin = request.headers.get("origin");
-    if (!isAllowedRequestOrigin(origin, allowedRequestOrigins())) {
+    if (!isAllowedRequestOrigin(origin, allowedRequestOrigins(request))) {
       return {
         response: Response.json(
           { error: "Invalid request origin." },

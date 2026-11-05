@@ -108,7 +108,7 @@ export async function POST(request: Request) {
     return json({ error: "Refresh the payment request and try again." }, 400);
   }
 
-  const publicOrigin = getPublicAppOrigin();
+  const publicOrigin = getPublicAppOrigin(request.headers.get("origin"));
   if (!publicOrigin) {
     return json(
       { error: "M-Pesa requires a public HTTPS preview or deployment for callbacks." },
