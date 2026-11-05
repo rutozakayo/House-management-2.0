@@ -733,6 +733,356 @@
     save();
   }
 
+  var mpesaAuthenticated = false;
+  var mpesaRequestInProgress = false;
+  var mpesaActivePaymentId = '';
+  var mpesaServerPayments = [];
+  var mpesaLoadedMonth = '';
+  var mpesaSyncInFlight = false;
+  var mpesaPollTimer = null;
+
+  function setMpesaMessage(text, tone) {
+    var el = byId('mpesaStatus');
+    if (!el) return;
+    el.textContent = text || '';
+    if (tone) el.setAttribute('data-tone', tone);
+    else el.removeAttribute('data-tone');
+  }
+
+  function updateMpesaControls() {
+    var payButton = byId('mpesaPayBtn');
+    var signedIn = mpesaAuthenticated;
+    var offline = window.navigator && window.navigator.onLine === false;
+    if (payButton) {
+      payButton.disabled = !signedIn || mpesaRequestInProgress || !!mpesaActivePaymentId || offline;
+    }
+    if (byId('mpesaSignIn')) byId('mpesaSignIn').hidden = signedIn;
+    if (byId('mpesaSignUp')) byId('mpesaSignUp').hidden = signedIn;
+    if (byId('mpesaSignOut')) byId('mpesaSignOut').hidden = !signedIn;
+  }
+
+  function updateMpesaAccess(user, unavailable) {
+    var status = byId('mpesaAuthStatus');
+    mpesaAuthenticated = !!user;
+    if (status) {
+      if (user) {
+        status.textContent = 'Signed in as ' + String(user.email || 'owner') + '.';
+      } else if (unavailable) {
+        status.textContent = 'Owner access could not be checked. Connect and try again.';
+      } else {
+        status.textContent = 'Sign in as the owner to use M-Pesa. First-time setup is limited to the configured owner email.';
+      }
+    }
+    updateMpesaControls();
+  }
+
+  function fetchMpesaJson(url, options) {
+    var config = Object.assign({ credentials: 'same-origin', cache: 'no-store' }, options || {});
+    return window.fetch(url, config).then(function (response) {
+      return response.json().catch(function () { return null; }).then(function (body) {
+        return { response: response, body: body };
+      });
+    });
+  }
+
+  function mpesaStatusInfo(status) {
+    if (status === 'succeeded') return { label: 'Paid', cls: 'ok', tone: 'success' };
+    if (status === 'failed') return { label: 'Not completed', cls: 'bad', tone: 'error' };
+    if (status === 'needs_review') return { label: 'Check payment', cls: 'warn', tone: 'warning' };
+    return { label: 'Pending', cls: 'neutral', tone: 'warning' };
+  }
+
+  function mpesaPaymentMessage(payment, timedOut) {
+    if (payment.status === 'succeeded') {
+      return 'Payment confirmed by Safaricom' + (payment.mpesaReceiptNumber ? ' · receipt ' + payment.mpesaReceiptNumber : '') + '. It has been added to the rent ledger once.';
+    }
+    if (payment.status === 'failed') return 'The M-Pesa payment was not completed. Manual payment entry is still available.';
+    if (payment.status === 'needs_review') return payment.resultDescription || 'Check the M-Pesa message or receipt before retrying.';
+    if (timedOut) return 'Still waiting for confirmation. Check the M-Pesa prompt and refresh status before starting another request.';
+    return 'Prompt sent to the selected tenant phone. The rent ledger updates only after server confirmation.';
+  }
+
+  function renderMpesaPayments() {
+    var el = byId('mpesaPayments');
+    if (!el) return;
+    if (!mpesaAuthenticated) {
+      el.innerHTML = '';
+      return;
+    }
+    if (!mpesaServerPayments.length) {
+      el.innerHTML = '<div class="empty">No M-Pesa requests for this month.</div>';
+      return;
+    }
+
+    el.innerHTML = mpesaServerPayments.map(function (payment) {
+      var info = mpesaStatusInfo(payment.status);
+      var paymentMonth = isMonth(payment.month) ? monthLabel(payment.month) : '';
+      return '<div class="msg ' + info.cls + '" role="listitem">' +
+        '<span class="msg-title">' + esc(payment.houseLabel || 'Rent payment') + '</span> ' +
+        '<span class="pill ' + info.cls + '">' + esc(info.label) + '</span>' +
+        '<small>KES ' + esc(fmt(payment.amount)) + (paymentMonth ? ' · ' + esc(paymentMonth) : '') + '</small>' +
+        (payment.mpesaReceiptNumber ? '<small>Receipt: ' + esc(payment.mpesaReceiptNumber) + '</small>' : '') +
+        (payment.resultDescription && payment.status !== 'succeeded' ? '<small>' + esc(payment.resultDescription) + '</small>' : '') +
+        '</div>';
+    }).join('');
+  }
+
+  function applyMpesaPayment(payment) {
+    if (!payment || payment.status !== 'succeeded' || !payment.id || !payment.houseId || !isMonth(payment.month)) return false;
+    var amount = Number(payment.amount);
+    if (!Number.isSafeInteger(amount) || amount < 1) return false;
+    var localId = 'mpesa-' + String(payment.id);
+    if (db.payments.some(function (saved) { return saved.id === localId; })) return false;
+    var date = String(payment.completedAt || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) date = today();
+    var receipt = typeof payment.mpesaReceiptNumber === 'string' ? payment.mpesaReceiptNumber : '';
+    db.payments.push(normalizePayment({
+      id: localId,
+      type: 'rent',
+      houseId: payment.houseId,
+      amount: amount,
+      month: payment.month,
+      date: date,
+      note: receipt ? 'M-Pesa receipt ' + receipt : 'M-Pesa payment'
+    }));
+    save();
+    return true;
+  }
+
+  function upsertMpesaPayment(payment) {
+    var id = String(payment.id || '');
+    if (!id) return;
+    var index = mpesaServerPayments.findIndex(function (item) { return String(item.id) === id; });
+    if (index === -1) mpesaServerPayments.unshift(payment);
+    else mpesaServerPayments[index] = payment;
+  }
+
+  function pollMpesaPayment(paymentId, deadline) {
+    if (!mpesaAuthenticated || typeof window.fetch !== 'function') return;
+    fetchMpesaJson('/api/mpesa/payments/' + encodeURIComponent(paymentId))
+      .then(function (result) {
+        if (!result.response.ok || !result.body || !result.body.payment) throw new Error('status');
+        var payment = result.body.payment;
+        upsertMpesaPayment(payment);
+        var added = applyMpesaPayment(payment);
+        renderMpesaPayments();
+        if (added) render();
+
+        if (payment.status === 'pending' && Date.now() < deadline) {
+          mpesaPollTimer = window.setTimeout(function () {
+            pollMpesaPayment(paymentId, deadline);
+          }, 4000);
+          return;
+        }
+
+        if (mpesaActivePaymentId === String(paymentId)) mpesaActivePaymentId = '';
+        updateMpesaControls();
+        setMpesaMessage(mpesaPaymentMessage(payment, payment.status === 'pending'), mpesaStatusInfo(payment.status).tone);
+      })
+      .catch(function () {
+        if (Date.now() < deadline) {
+          mpesaPollTimer = window.setTimeout(function () {
+            pollMpesaPayment(paymentId, deadline);
+          }, 5000);
+          return;
+        }
+        if (mpesaActivePaymentId === String(paymentId)) mpesaActivePaymentId = '';
+        updateMpesaControls();
+        setMpesaMessage('Could not confirm the payment status. Check M-Pesa before retrying.', 'warning');
+      });
+  }
+
+  function syncMpesaPayments(force) {
+    if (!mpesaAuthenticated || typeof window.fetch !== 'function' || mpesaSyncInFlight) return;
+    var requestedMonth = ui.month;
+    if (!force && mpesaLoadedMonth === requestedMonth) return;
+    mpesaSyncInFlight = true;
+
+    fetchMpesaJson('/api/mpesa/payments?month=' + encodeURIComponent(requestedMonth))
+      .then(function (result) {
+        if (result.response.status === 401) {
+          updateMpesaAccess(null, true);
+          throw new Error('session');
+        }
+        if (!result.response.ok || !result.body || !Array.isArray(result.body.payments)) throw new Error('payments');
+        mpesaLoadedMonth = requestedMonth;
+        mpesaServerPayments = result.body.payments;
+        var added = false;
+        mpesaServerPayments.forEach(function (payment) {
+          if (applyMpesaPayment(payment)) added = true;
+        });
+        renderMpesaPayments();
+        if (added) render();
+
+        var pending = mpesaServerPayments.find(function (payment) {
+          var created = new Date(payment.createdAt).getTime();
+          return payment.status === 'pending' && isFinite(created) && Date.now() - created < 120000;
+        });
+        if (pending && !mpesaActivePaymentId) {
+          mpesaActivePaymentId = String(pending.id);
+          updateMpesaControls();
+          pollMpesaPayment(pending.id, Date.now() + 120000);
+        }
+      })
+      .catch(function () {
+        mpesaLoadedMonth = requestedMonth;
+        if (mpesaAuthenticated) setMpesaMessage('Could not load M-Pesa statuses. Refresh when you are back online.', 'warning');
+      })
+      .finally(function () {
+        mpesaSyncInFlight = false;
+        updateMpesaControls();
+        if (mpesaAuthenticated && mpesaLoadedMonth !== ui.month) syncMpesaPayments(true);
+      });
+  }
+
+  function checkMpesaSession() {
+    if (typeof window.fetch !== 'function' || !byId('mpesaAuthStatus')) return;
+    fetchMpesaJson('/api/auth/get-session')
+      .then(function (result) {
+        if (!result.response.ok) throw new Error('session');
+        var user = result.body && result.body.user ? result.body.user : null;
+        updateMpesaAccess(user, false);
+        if (user) syncMpesaPayments(true);
+      })
+      .catch(function () {
+        updateMpesaAccess(null, true);
+      });
+  }
+
+  function handleMpesaPayment() {
+    if (!mpesaAuthenticated) {
+      window.location.assign('/sign-in');
+      return;
+    }
+    if (mpesaRequestInProgress) return;
+
+    var form = byId('rentForm');
+    if (form && !form.reportValidity()) return;
+    var house = houseById(byId('rHouse').value);
+    if (!house) return setMpesaMessage('Add or select a house first.', 'error');
+    if (String(db.settings.currency || '').trim().toUpperCase() !== 'KES') {
+      setMpesaMessage('M-Pesa requests are always in KES. Change the app currency to KES in Settings first.', 'warning');
+      return;
+    }
+
+    var amount = Number(byId('rAmount').value);
+    if (!Number.isSafeInteger(amount) || amount < 1) {
+      setMpesaMessage('Enter a positive whole-number amount in KES.', 'error');
+      byId('rAmount').focus();
+      return;
+    }
+    if (!String(house.phone || '').trim()) {
+      setMpesaMessage('Add the tenant phone number in Houses before sending an M-Pesa prompt.', 'error');
+      return;
+    }
+
+    if (mpesaActivePaymentId) {
+      var pendingPayment = mpesaServerPayments.find(function (item) {
+        return String(item.id) === mpesaActivePaymentId && item.status === 'pending';
+      });
+      if (pendingPayment && !window.confirm('An M-Pesa prompt is still pending. Starting another could charge the tenant twice. Continue anyway?')) return;
+    }
+
+    var idempotencyKey = window.crypto && typeof window.crypto.randomUUID === 'function'
+      ? window.crypto.randomUUID()
+      : 'rhm-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    var requestBody = {
+      houseId: house.id,
+      houseLabel: 'House ' + house.number,
+      month: ui.month,
+      amount: amount,
+      phoneNumber: house.phone,
+      currency: 'KES'
+    };
+
+    mpesaRequestInProgress = true;
+    updateMpesaControls();
+    setMpesaMessage('Sending an M-Pesa prompt to ' + house.phone + '…', 'warning');
+
+    fetchMpesaJson('/api/mpesa/stk-push', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': idempotencyKey
+      },
+      body: JSON.stringify(requestBody)
+    })
+      .then(function (result) {
+        var payment = result.body && result.body.payment;
+        if (payment) {
+          upsertMpesaPayment(payment);
+          renderMpesaPayments();
+          var added = applyMpesaPayment(payment);
+          if (added) render();
+          setMpesaMessage(mpesaPaymentMessage(payment, false), mpesaStatusInfo(payment.status).tone);
+          if (payment.status === 'pending') {
+            mpesaActivePaymentId = String(payment.id);
+            updateMpesaControls();
+            if (mpesaPollTimer) window.clearTimeout(mpesaPollTimer);
+            pollMpesaPayment(payment.id, Date.now() + 120000);
+          } else {
+            mpesaActivePaymentId = '';
+            updateMpesaControls();
+          }
+        } else if (!result.response.ok) {
+          setMpesaMessage(result.body && result.body.error ? result.body.error : 'M-Pesa request could not be started. Try again.', 'error');
+        }
+      })
+      .catch(function () {
+        setMpesaMessage('Could not reach the payment service. Checking server status before retrying.', 'warning');
+        syncMpesaPayments(true);
+      })
+      .finally(function () {
+        mpesaRequestInProgress = false;
+        updateMpesaControls();
+      });
+  }
+
+  function handleMpesaSignOut() {
+    if (typeof window.fetch !== 'function' || mpesaRequestInProgress) return;
+    mpesaRequestInProgress = true;
+    updateMpesaControls();
+    fetchMpesaJson('/api/auth/sign-out', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    })
+      .then(function (result) {
+        if (!result.response.ok) throw new Error('sign-out');
+        mpesaServerPayments = [];
+        mpesaLoadedMonth = '';
+        mpesaActivePaymentId = '';
+        if (mpesaPollTimer) window.clearTimeout(mpesaPollTimer);
+        updateMpesaAccess(null, false);
+        renderMpesaPayments();
+        setMpesaMessage('Signed out. Sign in again to manage M-Pesa payments.', '');
+      })
+      .catch(function () {
+        setMpesaMessage('Could not sign out. Try again while online.', 'error');
+      })
+      .finally(function () {
+        mpesaRequestInProgress = false;
+        updateMpesaControls();
+      });
+  }
+
+  function setupMpesaPayments() {
+    var payButton = byId('mpesaPayBtn');
+    if (!payButton) return;
+    payButton.addEventListener('click', handleMpesaPayment);
+    byId('mpesaRefreshBtn').addEventListener('click', function () {
+      syncMpesaPayments(true);
+      if (mpesaActivePaymentId) pollMpesaPayment(mpesaActivePaymentId, Date.now() + 120000);
+    });
+    byId('mpesaSignOut').addEventListener('click', handleMpesaSignOut);
+    window.addEventListener('online', function () {
+      updateMpesaControls();
+      checkMpesaSession();
+    });
+    updateMpesaControls();
+    checkMpesaSession();
+  }
+
   function payBalance(houseId, type) {
     var h = houseById(houseId);
     if (!h) return;
@@ -1040,7 +1390,7 @@
     byId('setCurrency').value = db.settings.currency || '';
     byId('setDeadline').value = db.settings.deadline || '';
     byId('setTheme').value = db.settings.theme || 'auto';
-    byId('versionLine').textContent = 'Rental House Manager v' + APP_VERSION + ' · data stored on this device';
+    byId('versionLine').textContent = 'Rental House Manager v' + APP_VERSION + ' · manual ledger on this device';
   }
 
   function render() {
@@ -1056,6 +1406,8 @@
     renderHistory();
     renderSummary();
     fillHouseSelects();
+    renderMpesaPayments();
+    syncMpesaPayments(false);
   }
 
   function setMonth(m) {
@@ -1509,6 +1861,7 @@
     bindEvents();
     render();
     showTab('houses');
+    setupMpesaPayments();
     wirePwa();
   }
 
@@ -1536,6 +1889,7 @@
     showTab: showTab,
     syncMonthControls: syncMonthControls,
     forceMonthFallback: function () { useMonthFallback = true; syncMonthControls(); },
+    applyMpesaPayment: applyMpesaPayment,
     save: save
   };
 

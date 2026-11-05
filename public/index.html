@@ -137,6 +137,27 @@
       </div>
     </div>
 
+    <div class="card" id="mpesaCard">
+      <div class="card-head">
+        <h2>Pay by M-Pesa</h2>
+        <span class="pill warn">Sandbox</span>
+      </div>
+      <p class="mpesa-warning" role="note">
+        Safaricom sandbox shortcode <strong>174379</strong> only. Requests are in <strong>KES</strong>.
+        Set the app currency to KES in Settings before sending a prompt. Do not use this sandbox to collect live rent.
+      </p>
+      <p class="hint" id="mpesaAuthStatus" role="status" aria-live="polite">Checking owner access…</p>
+      <div class="row-actions wrap">
+        <a class="btn small alt" id="mpesaSignIn" href="/sign-in">Owner sign in</a>
+        <a class="btn small alt" id="mpesaSignUp" href="/sign-up">First-time owner setup</a>
+        <button class="btn small alt" id="mpesaSignOut" type="button" hidden>Sign out</button>
+        <button class="btn small" id="mpesaPayBtn" type="button" disabled>Send STK prompt</button>
+        <button class="btn small alt" id="mpesaRefreshBtn" type="button">Refresh status</button>
+      </div>
+      <p class="mpesa-message" id="mpesaStatus" role="status" aria-live="polite">Sign in as the owner to view or request M-Pesa payments.</p>
+      <div class="mpesa-payments" id="mpesaPayments" role="list" aria-label="M-Pesa payment statuses"></div>
+    </div>
+
     <div class="card">
       <div class="card-head">
         <h2>Rent status — <span class="monthLabel"></span></h2>
@@ -278,7 +299,7 @@
           <input id="setDeadline" type="date">
         </label>
       </div>
-      <p class="hint">The dialling code turns local numbers (07…) into WhatsApp-ready numbers (2567…). Nothing leaves this device.</p>
+      <p class="hint">The dialling code formats WhatsApp numbers. Manual records stay on this device; M-Pesa payment requests are sent securely to the server.</p>
       <div class="form-actions"><button class="btn" type="submit">Save settings</button></div>
     </form>
 
