@@ -13,14 +13,38 @@ and reveals the main site — no page reload, no static images, no video.
 
 ```
 darknote/
-├─ index.html   # gate + main site markup
-├─ styles.css   # design system, neon layers, responsive rules
-├─ app.js       # canvas FX, boot transition, terminal, meters, clocks
-├─ favicon.svg  # hex "R" mark
+├─ index.html            # gate + main site markup
+├─ styles.css            # design system, neon layers, responsive rules
+├─ app.js                # canvas FX, boot transition, terminal, PWA install
+├─ sw.js                 # service worker — offline app shell
+├─ manifest.webmanifest  # installable app manifest
+├─ favicon.svg           # hex "R" mark
+├─ icons/                # 192 / 512 / maskable / apple-touch PNGs
 └─ README.md
 ```
 
 No build step, no dependencies. Everything is hand-written HTML/CSS/JS.
+
+---
+
+## Install as an app (PWA)
+
+The gate is installable. An **INSTALL APP** control sits in the top HUD (and a
+compact `INSTALL` button in the site nav) and only appears when the browser
+actually offers installation — no dead button.
+
+- `manifest.webmanifest`: standalone display, `#030408` theme, 192/512 icons
+  plus a dedicated maskable icon.
+- `sw.js`: precaches the shell (HTML, CSS, JS, icons, manifest), serves
+  navigations network-first with an offline fallback, and refreshes other
+  assets cache-first in the background. Bump `CACHE` when shipping changes.
+- Chrome / Edge / Android: native install prompt via `beforeinstallprompt`.
+- iOS Safari: no prompt API, so the same button opens a short
+  "Share → Add to Home Screen" sheet.
+- Already installed (standalone display mode): both buttons stay hidden.
+
+Service workers need `https://` or `localhost` — opening `index.html` from the
+filesystem will still render everything, it just won't be installable.
 
 ---
 

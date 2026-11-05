@@ -11,6 +11,12 @@
 <meta property="og:description" content="A premium cyberpunk interface for the DARKNOTE L2 system.">
 <meta property="og:type" content="website">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ReXnote">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;800;900&family=Chakra+Petch:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
@@ -42,7 +48,16 @@
       <span>SYSTEM ONLINE</span>
     </div>
     <div class="hud__cell hud__cell--mid">SECTOR 07 <b>/</b> SINGAPORE</div>
-    <div class="hud__cell"><span id="clock">--:--:--</span> <b>SGT</b></div>
+    <div class="hud__right">
+      <div class="hud__cell hud__clock"><span id="clock">--:--:--</span> <b>SGT</b></div>
+      <button class="install-btn" data-install type="button" hidden
+              aria-label="Install ReXnote as an app">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 3v11m0 0 4-4m-4 4-4-4M4 18.5h16" stroke="currentColor" stroke-width="1.7" stroke-linecap="square"/>
+        </svg>
+        <span>INSTALL APP</span>
+      </button>
+    </div>
   </div>
 
   <div class="gate__core">
@@ -146,6 +161,13 @@
 
     <div class="nav__right">
       <span class="nav__status"><span class="dot"></span>LIVE</span>
+      <button class="install-btn install-btn--nav" data-install type="button" hidden
+              aria-label="Install ReXnote as an app">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 3v11m0 0 4-4m-4 4-4-4M4 18.5h16" stroke="currentColor" stroke-width="1.7" stroke-linecap="square"/>
+        </svg>
+        <span>INSTALL</span>
+      </button>
       <button class="ghost-btn" id="backBtn" type="button">RETURN TO GATE</button>
     </div>
   </header>
@@ -334,6 +356,19 @@
     </div>
   </footer>
 
+</div>
+
+<div class="ios-sheet" id="iosSheet" hidden>
+  <div class="ios-sheet__card" role="dialog" aria-modal="true" aria-labelledby="iosTitle">
+    <p class="kicker"><span class="dot"></span>INSTALL · iOS</p>
+    <h4 id="iosTitle">Add ReXnote to your home screen</h4>
+    <ol>
+      <li>Tap the <b>Share</b> button in Safari</li>
+      <li>Scroll and choose <b>Add to Home Screen</b></li>
+      <li>Tap <b>Add</b> — ReXnote opens full screen, offline</li>
+    </ol>
+    <button class="solid-btn" id="iosClose" type="button">GOT IT</button>
+  </div>
 </div>
 
 <script src="app.js"></script>

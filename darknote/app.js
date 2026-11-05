@@ -458,10 +458,89 @@
     });
   }
 
+  /* ── PWA: service worker + install prompt ────────────────────── */
+  function initPWA() {
+    if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('sw.js').catch(function () { /* offline support is optional */ });
+      });
+    }
+
+    var buttons = document.querySelectorAll('[data-install]');
+    if (!buttons.length) return;
+
+    var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+                     window.navigator.standalone === true;
+    var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    var deferred = null;
+
+    function reveal() {
+      if (standalone) return;
+      buttons.forEach(function (b) { b.hidden = false; });
+      document.body.classList.add('can-install');
+    }
+    function conceal() {
+      buttons.forEach(function (b) { b.hidden = true; });
+      document.body.classList.remove('can-install');
+    }
+
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      deferred = e;
+      reveal();
+    });
+
+    window.addEventListener('appinstalled', function () {
+      deferred = null;
+      conceal();
+    });
+
+    if (standalone) { conceal(); }
+    else if (isIOS) { reveal(); }
+
+    var sheet = document.getElementById('iosSheet');
+    var closeBtn = document.getElementById('iosClose');
+
+    function closeSheet() { if (sheet) sheet.hidden = true; }
+
+    if (sheet) {
+      if (closeBtn) closeBtn.addEventListener('click', closeSheet);
+      sheet.addEventListener('click', function (e) { if (e.target === sheet) closeSheet(); });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && !sheet.hidden) closeSheet();
+      });
+    }
+
+    buttons.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (deferred && typeof deferred.prompt === 'function') {
+          var prompt = deferred;
+          deferred = null;
+          prompt.prompt();
+          prompt.userChoice.then(function (choice) {
+            conceal();
+            if (choice && choice.outcome === 'accepted') {
+              var title = document.querySelector('.brand__word');
+              if (title) title.classList.add('installed');
+            }
+          }).catch(conceal);
+          return;
+        }
+
+        if (isIOS && sheet) {
+          sheet.hidden = false;
+          if (closeBtn) closeBtn.focus();
+        }
+      });
+    });
+  }
+
   /* ── wire up ─────────────────────────────────────────────────── */
   function init() {
     initFX();
     initPointer();
+    initPWA();
     initClocks();
 
     if (enterBtn) enterBtn.addEventListener('click', function () { showSite(false); });
@@ -469,6 +548,8 @@
     if (backBtn2) backBtn2.addEventListener('click', showGate);
 
     document.addEventListener('keydown', function (e) {
+      var sheet = document.getElementById('iosSheet');
+      if (sheet && !sheet.hidden) return;
       if (e.key !== 'Enter') return;
       var tag = (document.activeElement && document.activeElement.tagName) || '';
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;

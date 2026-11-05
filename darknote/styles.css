@@ -725,3 +725,54 @@ body.site-active .scanbar{opacity:.4}
   .hint__tap{display:inline}
   .hint__desk{display:none}
 }
+
+/* ── PWA install control ──────────────────────────────────────── */
+.hud__right{display:flex;align-items:center;gap:clamp(8px,1.4vw,16px)}
+
+.install-btn{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:6px 11px;cursor:pointer;line-height:1;
+  border:1px solid rgba(0,200,255,.42);
+  background:rgba(0,200,255,.07);
+  color:#D8F5FF;text-transform:uppercase;
+  font-family:var(--mono);font-size:clamp(.48rem,.95vw,.58rem);
+  letter-spacing:.2em;
+  clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,8px 100%,0 calc(100% - 8px));
+  transition:background .3s ease,border-color .3s ease,color .3s ease;
+  animation:installGlow 3.6s ease-in-out infinite;
+}
+.install-btn svg{width:13px;height:13px;flex:0 0 auto}
+.install-btn:hover{background:rgba(0,200,255,.17);border-color:rgba(0,200,255,.85);color:#fff}
+.install-btn:focus-visible{outline:1px solid var(--blue);outline-offset:3px}
+@keyframes installGlow{
+  0%,100%{filter:drop-shadow(0 0 9px rgba(0,200,255,.22))}
+  50%{filter:drop-shadow(0 0 20px rgba(0,200,255,.6))}
+}
+.install-btn--nav{padding:9px 12px;letter-spacing:.16em;animation:none}
+.install-btn--nav:hover{animation:installGlow 1.6s ease-in-out infinite}
+
+/* iOS "add to home screen" sheet */
+.ios-sheet{
+  position:fixed;inset:0;z-index:95;display:grid;place-items:center;padding:22px;
+  background:rgba(3,4,8,.82);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+}
+.ios-sheet__card{
+  width:min(400px,100%);padding:clamp(22px,4vw,32px);
+  border:1px solid rgba(0,200,255,.3);
+  background:linear-gradient(160deg,rgba(0,200,255,.09),rgba(139,92,246,.06) 55%,#060a11);
+  clip-path:polygon(0 0,calc(100% - 18px) 0,100% 18px,100% 100%,18px 100%,0 calc(100% - 18px));
+  box-shadow:0 40px 120px -50px rgba(0,200,255,.6);
+  animation:sheetIn .4s var(--ease) both;
+}
+@keyframes sheetIn{from{opacity:0;transform:translateY(16px) scale(.98)}to{opacity:1;transform:none}}
+.ios-sheet__card h4{margin:0 0 14px;font-family:var(--display);font-weight:700;font-size:1.05rem;line-height:1.35;color:#F2FBFF}
+.ios-sheet__card ol{margin:0 0 22px;padding-left:18px;color:#9FB2C6;font-size:.9rem;line-height:1.8}
+.ios-sheet__card ol b{color:#CFEFFF;font-weight:500}
+.ios-sheet__card .kicker{margin-bottom:12px;font-size:.58rem}
+
+@media (max-width:720px){
+  body.can-install .hud__clock{display:none}
+  .install-btn{padding:7px 9px;letter-spacing:.14em}
+  .install-btn--nav{display:none}
+}
