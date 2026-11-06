@@ -264,8 +264,10 @@ input:invalid:not(:placeholder-shown) { border-color: var(--bad); }
   transition: filter .15s ease, transform .1s ease;
 }
 .btn:active { transform: scale(.98); }
-.btn:hover { filter: brightness(1.05); }
-.btn.alt {
+  .btn:hover { filter: brightness(1.05); }
+  .btn:disabled,
+  .btn:disabled:hover { opacity: .52; cursor: not-allowed; filter: saturate(.45); }
+  .btn.alt {
   background: var(--card); color: var(--accent);
   border-color: var(--line-strong);
 }
@@ -293,6 +295,32 @@ input:invalid:not(:placeholder-shown) { border-color: var(--bad); }
 
 .hint { color: var(--muted); font-size: 12.5px; line-height: 1.5; margin-top: 10px; }
 .hint a { font-weight: 600; }
+
+/* ---------- M-Pesa rent status ---------- */
+
+.mpesa-warning {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--warn);
+  border-radius: 10px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.mpesa-message {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.mpesa-message[data-tone="success"] { color: var(--ok); }
+.mpesa-message[data-tone="error"] { color: var(--bad); }
+.mpesa-message[data-tone="warning"] { color: var(--warn); }
+.mpesa-payments { display: grid; gap: 8px; margin-top: 10px; }
 
 /* ---------- tables ---------- */
 

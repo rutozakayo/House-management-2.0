@@ -19,8 +19,8 @@ function eq(name, actual, expected) {
   ok(name, JSON.stringify(actual) === JSON.stringify(expected), `got ${JSON.stringify(actual)}, expected ${JSON.stringify(expected)}`);
 }
 
-const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
-const appjs = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
+const appjs = fs.readFileSync(path.join(ROOT, 'public', 'app.js'), 'utf8');
 
 if (!html.includes('<script src="app.js"></script>')) throw new Error('script tag missing');
 
@@ -261,6 +261,23 @@ ok('choosing a month from fallback works', $('month').value === '2026-10', $('mo
 ok('labels follow fallback month', [...doc.querySelectorAll('.monthLabel')].some(el => el.textContent === 'October 2026'));
 console.log('\n----------------------------------------');
 console.log(`TOTAL PASS ${pass} / FAIL ${failures.length}`);
+
+console.log('\n15. M-Pesa ledger reconciliation');
+const pendingMpesa = {
+  id: 'sandbox-pending-1', status: 'pending', houseId: h.id,
+  month: '2026-11', amount: 125, completedAt: null
+};
+const confirmedMpesa = {
+  id: 'sandbox-success-1', status: 'succeeded', houseId: h.id,
+  month: '2026-11', amount: 125, completedAt: '2026-11-05T12:30:00.000Z',
+  mpesaReceiptNumber: 'TEST123456'
+};
+const beforeMpesa = RHM.getDb().payments.length;
+eq('pending M-Pesa request is not recorded as rent', RHM.applyMpesaPayment(pendingMpesa), false);
+eq('confirmed M-Pesa payment is recorded once', RHM.applyMpesaPayment(confirmedMpesa), true);
+eq('duplicate confirmation does not double-count', RHM.applyMpesaPayment(confirmedMpesa), false);
+eq('one confirmed rent entry added', RHM.getDb().payments.length, beforeMpesa + 1);
+ok('confirmed receipt is saved in the ledger note', RHM.getDb().payments.some(p => p.id === 'mpesa-sandbox-success-1' && p.note === 'M-Pesa receipt TEST123456'));
 
 console.log('\n----------------------------------------');
 console.log(`app: PASS ${pass} / FAIL ${failures.length}`);

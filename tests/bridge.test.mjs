@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
-const html = fs.readFileSync(path.join(ROOT, 'legacy-export.html'), 'utf8');
+const html = fs.readFileSync(path.join(ROOT, 'public', 'legacy-export.html'), 'utf8');
 
 let pass = 0;
 const fails = [];

@@ -1,11 +1,12 @@
 /* Rental House Manager — service worker (offline app shell) */
-const CACHE = 'rhm-shell-v2.0.0';
+const CACHE = 'rhm-shell-v2.1.1';
 const ASSETS = [
   './',
   './index.html',
   './styles.css',
   './app.js',
   './manifest.webmanifest',
+  './legacy-export.html',
   './icons/favicon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -39,17 +40,28 @@ self.addEventListener('fetch', event => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+  if (
+    url.pathname.startsWith('/api/') ||
+    url.pathname.startsWith('/_next/') ||
+    url.pathname === '/sign-in' ||
+    url.pathname === '/sign-up'
+  ) return;
 
-  // Navigations: network first, fall back to the cached shell when offline.
+  // Never cache account pages as the offline dashboard shell.
   if (request.mode === 'navigate') {
+    const fallback = url.pathname.endsWith('/legacy-export.html')
+      ? './legacy-export.html'
+      : './index.html';
     event.respondWith(
       fetch(request)
         .then(response => {
-          const copy = response.clone();
-          caches.open(CACHE).then(cache => cache.put('./index.html', copy));
+          const isDashboard = url.pathname === '/' || url.pathname.endsWith('/index.html');
+          if (isDashboard && response.ok && !response.redirected) {
+            caches.open(CACHE).then(cache => cache.put('./index.html', response.clone()));
+          }
           return response;
         })
-        .catch(() => caches.match('./index.html').then(r => r || caches.match('./')))
+        .catch(() => caches.match(fallback).then(r => r || caches.match('./index.html')))
     );
     return;
   }
